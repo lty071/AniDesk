@@ -1,6 +1,6 @@
 # AniDesk Python
 
-AniDesk 的 Python 3.13 + PySide6 Widgets 实现。现有 Tauri 代码保留在仓库根目录，作为功能和备份格式的兼容参照。
+AniDesk 的 Python 3.13 + PySide6 Widgets 实现。
 
 ## 开发
 
