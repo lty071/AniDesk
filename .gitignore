@@ -1,0 +1,32 @@
+node_modules/
+.pnpm-store/
+dist/
+target/
+src-tauri/target/
+*.log
+.idea/
+.vscode/
+*.anibackup
+coverage/
+
+# Python development and packaging
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+*.spec.bak
+anidesk_py/.ruff_cache/
+anidesk_py/.mypy_cache/
+anidesk_py/dist/
+anidesk_py/build/
+
+# Local scratch files
+tmp/
+
+# Prepared GitHub upload and release artifacts
+github_upload/
+AniDesk-v*-win-x64.zip
