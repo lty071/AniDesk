@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
             if index == 0:
                 button.setChecked(True)
         side_layout.addStretch()
-        side_layout.addWidget(QLabel("v0.1.2 · Local First"))
+        side_layout.addWidget(QLabel("v0.1.4 · Local First"))
         layout.addWidget(sidebar)
         layout.addWidget(self.stack, 1)
         layout.setContentsMargins(0, 0, 0, 0)

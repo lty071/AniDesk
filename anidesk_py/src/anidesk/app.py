@@ -61,6 +61,9 @@ def main() -> int:
     menu = QMenu()
     show_action = QAction("显示 AniDesk", menu)
     show_action.triggered.connect(window.show_and_activate)
+    show_overlay_action = QAction("显示追更悬浮窗", menu)
+    show_overlay_action.triggered.connect(overlay.reveal)
+    controller.floating_window_visibility_changed.connect(show_overlay_action.setEnabled)
     quit_action = QAction("退出", menu)
 
     def quit_application() -> None:
@@ -72,6 +75,7 @@ def main() -> int:
 
     quit_action.triggered.connect(quit_application)
     menu.addAction(show_action)
+    menu.addAction(show_overlay_action)
     menu.addSeparator()
     menu.addAction(quit_action)
     tray.setContextMenu(menu)

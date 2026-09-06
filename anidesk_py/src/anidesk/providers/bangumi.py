@@ -18,7 +18,7 @@ class BangumiCatalogProvider:
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(
             timeout=httpx.Timeout(30.0, connect=8.0),
-            headers={"User-Agent": "AniDesk/0.1.2 (desktop anime tracker)"},
+            headers={"User-Agent": "AniDesk/0.1.4 (desktop anime tracker)"},
             follow_redirects=True,
         )
 

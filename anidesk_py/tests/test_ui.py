@@ -5,7 +5,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, QPoint, QSettings, Qt
 
 from anidesk.domain.models import Anime, ArchiveRecord, ArchivedAnime, ReminderItem, Season
 from anidesk.services.covers import CoverCache
@@ -34,8 +34,9 @@ def test_season_combo_returns_season_enum(qtbot, tmp_path: Path) -> None:
     assert selected is Season.FALL
 
 
-def test_overlay_keeps_updates_and_collapses_to_screen_edge(qtbot) -> None:
-    overlay = ReminderOverlay()
+def test_overlay_keeps_updates_and_uses_reliable_edge_auto_hide(qtbot, tmp_path: Path) -> None:
+    settings = QSettings(str(tmp_path / "overlay.ini"), QSettings.Format.IniFormat)
+    overlay = ReminderOverlay(settings)
     qtbot.addWidget(overlay)
     now = datetime.now(UTC)
     yesterday = (now - timedelta(days=1)).isoformat().replace("+00:00", "Z")
@@ -45,16 +46,38 @@ def test_overlay_keeps_updates_and_collapses_to_screen_edge(qtbot) -> None:
     overlay.show_items([first, second])
     assert overlay.current is first
     assert len(overlay.items) == 2
-    assert overlay.isVisible()
-    overlay._collapse()
-    collapsed_x = overlay.x()
+    assert not overlay.isVisible()
+    assert overlay.edge_hot_zone.isValid()
+    assert overlay.edge_hot_zone.width() == overlay.HOT_ZONE_WIDTH
+    assert overlay._hover_timer.isActive()
+    assert overlay._hover_timer.interval() == overlay.HOVER_POLL_MS
     assert overlay.collapsed
-    overlay._expand()
+
+    pinned_screen = overlay.pinned_screen_name
+    overlay._check_edge_hover(overlay.edge_hot_zone.center())
     assert not overlay.collapsed
-    assert overlay.x() < collapsed_x
-    overlay._dismiss()
+    assert overlay.isVisible()
+    expanded_position = overlay.pos()
+
+    drag_start = expanded_position + QPoint(30, 15)
+    overlay._start_drag(drag_start)
+    overlay._drag_to(drag_start + QPoint(-80, 35))
+    assert overlay.pos() == expanded_position + QPoint(-80, 35)
+    overlay._finish_drag(drag_start + QPoint(-80, 35))
+    assert overlay.pinned_screen_name == pinned_screen
+    assert settings.value("overlay/screen") == pinned_screen
+
+    overlay._collapse(animate=False)
     assert overlay.collapsed
+    assert not overlay.isVisible()
+    assert overlay.edge_hot_zone.isValid()
     assert overlay.current is first
+    assert overlay._animation.duration() == overlay.ANIMATION_MS
+
+    overlay.set_enabled(False)
+    assert not overlay._hover_timer.isActive()
+    overlay._check_edge_hover(overlay.edge_hot_zone.center())
+    assert not overlay.isVisible()
 
 
 def test_archive_note_can_be_edited_and_saved_in_page(qtbot, tmp_path: Path) -> None:

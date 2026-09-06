@@ -17,7 +17,7 @@ class CoverCache:
         self._client = client or httpx.Client(
             timeout=httpx.Timeout(20.0, connect=8.0),
             follow_redirects=True,
-            headers={"User-Agent": "AniDesk/0.1.2 (desktop anime tracker)"},
+            headers={"User-Agent": "AniDesk/0.1.4 (desktop anime tracker)"},
         )
         self._locks_guard = threading.Lock()
         self._download_locks: dict[Path, threading.Lock] = {}
