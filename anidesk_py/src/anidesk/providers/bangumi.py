@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from anidesk import __version__
 from anidesk.domain.models import Anime, AnimeStatus, Season
 from anidesk.services.season import SEASON_MONTHS, season_for_month
 from anidesk.services.timeutil import utc_now_iso
@@ -18,7 +19,7 @@ class BangumiCatalogProvider:
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(
             timeout=httpx.Timeout(30.0, connect=8.0),
-            headers={"User-Agent": "AniDesk/0.1.4 (desktop anime tracker)"},
+            headers={"User-Agent": f"AniDesk/{__version__} (desktop anime tracker)"},
             follow_redirects=True,
         )
 

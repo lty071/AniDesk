@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from importlib import resources
 from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QCoreApplication, QTimer, Qt
@@ -17,6 +16,8 @@ from anidesk.storage import SqliteRepository
 from anidesk.ui.controller import AppController
 from anidesk.ui.main_window import MainWindow
 from anidesk.ui.overlay import ReminderOverlay
+from anidesk.ui.theme import ThemeManager, stylesheet
+from anidesk.services.appearance import Appearance
 
 
 def _configure_logging() -> None:
@@ -27,10 +28,14 @@ def _configure_logging() -> None:
 
 
 def _stylesheet() -> str:
-    return resources.files("anidesk.resources").joinpath("style.qss").read_text(encoding="utf-8")
+    return stylesheet(Appearance())
 
 
 def main() -> int:
+    if "--self-test" in sys.argv:
+        from anidesk.diagnostics import run_self_test
+
+        return run_self_test()
     _configure_logging()
     QCoreApplication.setOrganizationName("AniDesk")
     QCoreApplication.setOrganizationDomain("com.anidesk.desktop")
@@ -38,19 +43,19 @@ def main() -> int:
     QCoreApplication.setApplicationVersion(__version__)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
-    app.setStyleSheet(_stylesheet())
+    theme = ThemeManager(app)
     icon_path = resource_path("icon.ico")
     icon = QIcon(str(icon_path)) if icon_path.is_file() else QIcon()
     app.setWindowIcon(icon)
     covers = CoverCache()
-    window = MainWindow(covers)
+    window = MainWindow(covers, theme)
     window.setWindowIcon(icon)
     instance = SingleInstance()
     if not instance.acquire(window.show_and_activate):
         return 0
     repository = SqliteRepository()
     controller = AppController(window, repository, covers, app)
-    overlay = ReminderOverlay()
+    overlay = ReminderOverlay(theme=theme, covers=covers)
     overlay.setWindowIcon(icon)
     overlay.open_requested.connect(controller.open_url)
     overlay.snooze_requested.connect(controller.snooze_reminder)
@@ -67,6 +72,11 @@ def main() -> int:
     quit_action = QAction("退出", menu)
 
     def quit_application() -> None:
+        writer = window.archive_page.writer
+        if writer and writer.isVisible() and not writer.close():
+            if writer.pending:
+                writer.after_save_close = quit_application
+            return
         window.allow_close = True
         tray.hide()
         overlay.close()
@@ -108,5 +118,4 @@ def main() -> int:
     tray.show()
     window.show()
     QTimer.singleShot(0, controller.start)
-    QTimer.singleShot(2000, controller.check_reminders)
     return app.exec()

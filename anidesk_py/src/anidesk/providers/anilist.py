@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+import threading
+import time
 
 from anidesk.domain.models import Anime, AniListCandidate, EpisodeSchedule, ScheduleSource, Season
 from anidesk.services.season import iso_date
@@ -15,15 +18,44 @@ class AniListScheduleProvider:
 
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(timeout=httpx.Timeout(15.0, connect=8.0))
+        self._request_lock = threading.Lock()
+        self._next_request = 0.0
+        self._cooldown = 0.0
+
+    def _post(self, query, variables):
+        with self._request_lock:
+            if time.monotonic() < self._cooldown:
+                raise ProviderError("AniList 暂时不可用，稍后自动重试")
+            for attempt in range(2):
+                time.sleep(max(0, self._next_request - time.monotonic()))
+                self._next_request = time.monotonic() + 2.1
+                try:
+                    response = self._client.post(self.endpoint,
+                        headers={"Accept": "application/json", "Content-Type": "application/json"},
+                        json={"query": query, "variables": variables})
+                except httpx.TransportError:
+                    if attempt == 0:
+                        self._next_request = time.monotonic() + 2
+                        continue
+                    self._cooldown = time.monotonic() + 60
+                    raise
+                if response.status_code == 429:
+                    try:
+                        delay = max(60, float(response.headers.get("Retry-After", "60")))
+                    except ValueError:
+                        delay = 60
+                    self._cooldown = time.monotonic() + delay
+                elif response.status_code >= 500:
+                    if attempt == 0:
+                        self._next_request = time.monotonic() + 2
+                        continue
+                    self._cooldown = time.monotonic() + 60
+                return response
 
     def _graphql(self, query: str, variables: dict[str, object]) -> dict[str, Any]:
         try:
             response = checked_response(
-                self._client.post(
-                    self.endpoint,
-                    headers={"Accept": "application/json", "Content-Type": "application/json"},
-                    json={"query": query, "variables": variables},
-                ),
+                self._post(query, variables),
                 "AniList",
             )
             payload = response.json()
@@ -58,14 +90,30 @@ class AniListScheduleProvider:
 
     def get_schedule(self, anime_id: str, anilist_id: int) -> list[EpisodeSchedule]:
         query = """
-        query Schedule($id: Int!) {
-          Media(id: $id, type: ANIME) {
-            airingSchedule(perPage: 50) { nodes { episode airingAt } }
+        query Schedule($id: Int!, $since: Int!, $page: Int!) {
+          Page(page: $page, perPage: 50) {
+            pageInfo { hasNextPage }
+            airingSchedules(mediaId: $id, airingAt_greater: $since, sort: TIME) {
+              episode airingAt
+            }
           }
         }
         """
-        data = self._graphql(query, {"id": anilist_id})
-        nodes = ((((data.get("Media") or {}).get("airingSchedule") or {}).get("nodes")) or [])
+        # Query near the current date instead of the first page of a series'
+        # entire history. Three days includes yesterday in every local timezone
+        # and across DST changes, retaining the floating window's daily updates.
+        since = int((datetime.now(UTC) - timedelta(days=3)).timestamp()) - 1
+        nodes: dict[int, dict[str, Any]] = {}
+        page = 1
+        while True:
+            data = self._graphql(query, {"id": anilist_id, "since": since, "page": page})
+            result = data.get("Page") or {}
+            batch = result.get("airingSchedules") or []
+            for node in batch:
+                nodes[int(node["episode"])] = node
+            if not batch or not (result.get("pageInfo") or {}).get("hasNextPage"):
+                break
+            page += 1
         synced_at = utc_now_iso()
         return [
             EpisodeSchedule(
@@ -76,13 +124,11 @@ class AniListScheduleProvider:
                 source=ScheduleSource.ANILIST,
                 synced_at=synced_at,
             )
-            for node in nodes
+            for node in sorted(nodes.values(), key=lambda node: (int(node["airingAt"]), int(node["episode"])))
         ]
 
     @staticmethod
     def _epoch_iso(value: int) -> str:
-        from datetime import UTC, datetime
-
         return datetime.fromtimestamp(value, UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
     @classmethod

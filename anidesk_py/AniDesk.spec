@@ -1,12 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import re
 
 import PySide6
 
 root = Path(SPECPATH)
 source = root / "src"
-project_root = root.parent
-icon = project_root / "src-tauri" / "icons" / "icon.ico"
+version = re.search(r'__version__ = "([^"]+)"', (source / "anidesk" / "__init__.py").read_text(encoding="utf-8")).group(1)
+icon = source / "anidesk" / "resources" / "icon.ico"
 pyside_dir = Path(PySide6.__file__).parent
 
 # Python 3.13 can ship an older VC runtime than the one bundled with the
@@ -29,8 +30,10 @@ vc_runtime_binaries = [
 datas = [
     (str(source / "anidesk" / "resources" / "style.qss"), "anidesk/resources"),
     (str(source / "anidesk" / "storage" / "migrations" / "001_initial.sql"), "anidesk/storage/migrations"),
-    (str(icon), "resources"),
+    (str(icon), "anidesk/resources"),
+    (str(source / "anidesk" / "resources" / "sidebar"), "anidesk/resources/sidebar"),
 ]
+datas.extend((str(path), "anidesk/resources") for path in (source / "anidesk/resources").glob("chevron-*.png"))
 
 a = Analysis(
     [str(root / "run_anidesk.py")],
@@ -58,26 +61,17 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
-    name="AniDesk",
+    name=f"AniDesk-v{version}",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch="x86_64",
     icon=str(icon),
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="AniDesk",
 )

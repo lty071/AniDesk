@@ -21,6 +21,7 @@ class AnimeStatus(StrEnum):
 class ScheduleSource(StrEnum):
     ANILIST = "anilist"
     MANUAL = "manual"
+    ESTIMATED = "estimated"
 
 
 class BackupKind(StrEnum):
@@ -93,6 +94,8 @@ class FollowedAnime:
     follow: FollowRecord
     schedules: list[EpisodeSchedule] = field(default_factory=list)
     links: list[PlaybackLink] = field(default_factory=list)
+    schedule_note: str = ""
+    broadcast_weekday: int | None = None
 
 
 @dataclass(slots=True)
@@ -143,3 +146,4 @@ class ReminderItem:
     default_url: str | None
     links: list[PlaybackLink]
     already_aired: bool
+    estimated: bool = False

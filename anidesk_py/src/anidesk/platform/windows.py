@@ -3,20 +3,34 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from importlib import resources
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QSettings, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
+
+from .paths import app_data_dir
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_NAME = "AniDesk"
 
 
 def resource_path(name: str) -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS")) / "resources" / name
-    return Path(__file__).resolve().parents[4] / "src-tauri" / "icons" / name
+    return Path(str(resources.files("anidesk.resources").joinpath(name)))
+
+
+def portable_settings() -> QSettings:
+    path = app_data_dir() / "settings.ini"
+    is_new = not path.exists()
+    settings = QSettings(str(path), QSettings.Format.IniFormat)
+    if is_new:
+        legacy = QSettings(QSettings.Format.NativeFormat, QSettings.Scope.UserScope, "AniDesk", "AniDesk")
+        for key in ("overlay/screen", "overlay/side", "overlay/y"):
+            if legacy.contains(key):
+                settings.setValue(key, legacy.value(key))
+        settings.sync()
+    return settings
 
 
 def open_external(url: str) -> bool:
